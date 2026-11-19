@@ -183,22 +183,24 @@ class Game:
             return
         if len(key) != 1 or not key.isprintable():
             return
-        ch = key.lower() if key.isalpha() else key
+        ch = key
+        typed = self.typed + ch
 
         if self.locked is None:
-            candidates = [c for c in self.commands if c.text.startswith(ch)]
+            candidates = [c for c in self.commands
+                          if c.text.lower().startswith(ch.lower())]
             if not candidates:
                 self._wrong()
                 return
             self.locked = max(candidates, key=lambda c: c.y)
             self.typed = ch
         else:
-            if not self.locked.text.startswith(self.typed + ch):
+            if not self.locked.text.lower().startswith(typed.lower()):
                 self._wrong()
                 return
-            self.typed += ch
+            self.typed = typed
 
-        if self.typed == self.locked.text:
+        if self.typed.lower() == self.locked.text.lower():
             self._destroy(self.locked)
 
     def _wrong(self) -> None:
@@ -256,11 +258,11 @@ class Game:
         if self.locked is None:
             self.locked = target
             self.typed = ""
-        if not target.text.startswith(self.typed):
+        if not target.text.lower().startswith(self.typed.lower()):
             self.typed = ""
             return
         self.typed += target.text[len(self.typed)]
-        if self.typed == target.text:
+        if self.typed.lower() == target.text.lower():
             self._destroy(target)
             self.auto_timer = self.rng.uniform(0.28, 0.55)
         else:

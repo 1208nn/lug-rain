@@ -101,7 +101,7 @@ def draw_commands(c: Canvas, game: Game, ox: int, oy: int, w: int, h: int,
         if cmd is target:
             c.put(x - 1, y, "▐", BG, color)
             typed = game.typed if cmd is game.locked else ""
-            if typed and text.startswith(typed):
+            if typed and text.lower().startswith(typed.lower()):
                 c.put(x, y, typed, WHITE, color, bold=True)
                 c.put(x + twidth(typed), y, text[len(typed):], BG, color, bold=True)
             else:
@@ -151,7 +151,7 @@ def draw_prompt(c: Canvas, game: Game, w: int, h: int, now: float) -> None:
         dx = 9 + twidth(target.text)
         c.put(dx, py + 2, "·", FAINT, PANEL)
         c.put(dx + 2, py + 2, target.desc, DIM, PANEL)
-        if game.typed and target.text.startswith(game.typed):
+        if game.typed and target.text.lower().startswith(game.typed.lower()):
             c.right(w - 2, py + 2, f"{len(game.typed)}/{twidth(target.text)}", FAINT, PANEL)
     else:
         c.put(2, py + 2, "等一条命令落下来…", FAINT, PANEL)
