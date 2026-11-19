@@ -58,6 +58,7 @@ class Game:
         self.rank = "D"
         self.flash = 0.0
         self.wrong_flash = 0.0
+        self.case_hint = 0.0
         self.shake = 0.0
         self.spawn_timer = 0.35
         self.auto_timer = 0.25
@@ -75,8 +76,7 @@ class Game:
     def matches(self) -> list[Falling]:
         if not self.typed:
             return list(self.commands)
-        return [c for c in self.commands
-                if c.text.lower().startswith(self.typed.lower())]
+        return [c for c in self.commands if c.text.startswith(self.typed)]
 
     @property
     def target(self) -> Falling | None:
@@ -94,6 +94,7 @@ class Game:
         dt = min(dt, 0.25)
         self.flash = max(0.0, self.flash - dt)
         self.wrong_flash = max(0.0, self.wrong_flash - dt)
+        self.case_hint = max(0.0, self.case_hint - dt)
         self.shake = max(0.0, self.shake - dt)
         self.fx.update(dt)
 
@@ -188,6 +189,7 @@ class Game:
             return
         if key == "backspace":
             self.typed = self.typed[:-1]
+            self.case_hint = 0.0
             if not self.typed:
                 self.locked = None
             return
@@ -197,20 +199,26 @@ class Game:
         typed = self.typed + ch
 
         if self.locked is None:
-            candidates = [c for c in self.commands
-                          if c.text.lower().startswith(ch.lower())]
+            candidates = [c for c in self.commands if c.text.startswith(ch)]
             if not candidates:
+                if any(c.text.lower().startswith(ch.lower()) for c in self.commands):
+                    self.case_hint = 1.4
                 self._wrong()
                 return
             self.locked = max(candidates, key=lambda c: c.y)
             self.typed = ch
+            self.case_hint = 0.0
         else:
-            if not self.locked.text.lower().startswith(typed.lower()):
+            if not self.locked.text.startswith(typed):
+                expected = self.locked.text[len(self.typed):len(self.typed) + 1]
+                if expected and expected != ch and expected.lower() == ch.lower():
+                    self.case_hint = 1.4
                 self._wrong()
                 return
             self.typed = typed
+            self.case_hint = 0.0
 
-        if self.typed.lower() == self.locked.text.lower():
+        if self.typed == self.locked.text:
             self._destroy(self.locked)
 
     def use_tab(self) -> None:
@@ -248,6 +256,7 @@ class Game:
             self.combo += 1
             self.max_combo = max(self.max_combo, self.combo)
         self.fx.burst(c.x + twidth(c.text) / 2, c.y + 0.5, (255, 198, 96), 14)
+        self.case_hint = 0.0
         if self.locked is c:
             self.locked = None
             self.typed = ""
@@ -256,6 +265,7 @@ class Game:
         if self.state != "playing" or c not in self.commands:
             return
         self.commands.remove(c)
+        self.case_hint = 0.0
         if self.locked is c:
             self.locked = None
             self.typed = ""
@@ -282,11 +292,11 @@ class Game:
         if self.locked is None:
             self.locked = target
             self.typed = ""
-        if not target.text.lower().startswith(self.typed.lower()):
+        if not target.text.startswith(self.typed):
             self.typed = ""
             return
         self.typed += target.text[len(self.typed)]
-        if self.typed.lower() == target.text.lower():
+        if self.typed == target.text:
             self._destroy(target)
             self.auto_timer = self.rng.uniform(0.28, 0.55)
         else:

@@ -116,7 +116,7 @@ def draw_commands(c: Canvas, game: Game, ox: int, oy: int, w: int, h: int,
         if cmd is target:
             c.put(x - 1, y, "▐", BG, color)
             typed = game.typed if cmd is target else ""
-            if typed and text.lower().startswith(typed.lower()):
+            if typed and text.startswith(typed):
                 c.put(x, y, typed, WHITE, color, bold=True)
                 c.put(x + twidth(typed), y, text[len(typed):], BG, color, bold=True)
             else:
@@ -166,7 +166,10 @@ def draw_prompt(c: Canvas, game: Game, w: int, h: int, now: float) -> None:
         dx = 9 + twidth(target.text)
         c.put(dx, py + 2, "·", FAINT, PANEL)
         c.put(dx + 2, py + 2, target.desc, DIM, PANEL)
-        if game.typed:
+        if game.case_hint > 0:
+            c.right(w - 2, py + 2, "大小写不匹配 · Shift",
+                    AMBER, PANEL, bold=True)
+        elif game.typed:
             c.right(w - 2, py + 2,
                     f"{len(game.typed)}/{twidth(target.text)}", FAINT, PANEL)
         else:
@@ -286,7 +289,7 @@ def draw_attract(c: Canvas, game: Game, rain: Rain, board: list[dict],
 
     tips = (
         "TIP // Tab 立即完成当前命令，每局只有 2 次",
-        "TIP // 直接敲完整命令；大小写不敏感",
+        "TIP // 大小写敏感；-I 这种要用 Shift 输入大写",
         "TIP // 连击每 5 次升一级倍率，最高 x5",
         "TIP // 失误不断连击，但会扣一条命",
     )
