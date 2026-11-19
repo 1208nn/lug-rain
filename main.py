@@ -51,9 +51,24 @@ def multiplier(game: Game) -> int:
     return min(5, 1 + game.combo // 5)
 
 
-def draw_logo(c: Canvas, x: int, y: int) -> int:
+def cyc(now: float, colors: tuple, speed: float = 0.5):
+    t = now * speed
+    i = int(t) % len(colors)
+    f = t - int(t)
+    return mix(colors[i], colors[(i + 1) % len(colors)], f)
+
+
+def draw_logo(c: Canvas, x: int, y: int, now: float) -> int:
     for i, line in enumerate(LUG_LOGO):
-        c.put(x, y + i, line, LOGO_COLORS[i], PANEL, bold=True)
+        for j, ch in enumerate(line):
+            if ch == " ":
+                continue
+            base = LOGO_COLORS[i]
+            shine = max(0.0, math.sin(j * 0.28 + i * 0.9 - now * 3.4))
+            color = mix(base, WHITE, 0.50 * shine)
+            if (j + i * 3 - int(now * 14)) % 26 < 3:
+                color = WHITE
+            c.put(x + j, y + i, ch, color, PANEL, bold=True)
     return twidth(LUG_LOGO[0])
 
 
@@ -100,8 +115,8 @@ def draw_commands(c: Canvas, game: Game, ox: int, oy: int, w: int, h: int,
         x = ox + max(0, min(cmd.x, w - tw - 2))
         if cmd is target:
             c.put(x - 1, y, "▐", BG, color)
-            typed = game.typed if cmd is game.locked else ""
-            if typed and text.lower().startswith(typed.lower()):
+            typed = game.typed if cmd is target else ""
+            if typed and text.startswith(typed):
                 c.put(x, y, typed, WHITE, color, bold=True)
                 c.put(x + twidth(typed), y, text[len(typed):], BG, color, bold=True)
             else:
@@ -136,8 +151,8 @@ def draw_prompt(c: Canvas, game: Game, w: int, h: int, now: float) -> None:
     prompt_bg = mix(PANEL, RED, 0.22) if game.wrong_flash > 0 else PANEL
     c.fill(0, py + 1, w, 1, " ", INK, prompt_bg)
     c.put(1 + shake, py + 1, "lug@booth", GREEN, prompt_bg, bold=True)
-    c.put(11 + shake, py + 1, ":~$", TEAL, prompt_bg, bold=True)
-    x = 16 + shake
+    c.put(10 + shake, py + 1, ":~$", TEAL, prompt_bg, bold=True)
+    x = 14 + shake
     typed = game.typed
     c.put(x, py + 1, typed, WHITE, prompt_bg, bold=True)
     if int(now * 3) % 2 == 0:
@@ -151,8 +166,21 @@ def draw_prompt(c: Canvas, game: Game, w: int, h: int, now: float) -> None:
         dx = 9 + twidth(target.text)
         c.put(dx, py + 2, "·", FAINT, PANEL)
         c.put(dx + 2, py + 2, target.desc, DIM, PANEL)
-        if game.typed and target.text.lower().startswith(game.typed.lower()):
-            c.right(w - 2, py + 2, f"{len(game.typed)}/{twidth(target.text)}", FAINT, PANEL)
+        if game.typed == target.text:
+            c.right(w - 2, py + 2, "Enter 执行", AMBER, PANEL, bold=True)
+        elif game.typed:
+            n = len(game.matches())
+            hint = f"{len(game.typed)}/{twidth(target.text)}"
+            if n > 1:
+                hint += f" · {n} 候选"
+            c.right(w - 2, py + 2, hint, FAINT, PANEL)
+    elif game.typed:
+        ci = [c for c in game.commands
+              if c.text.lower().startswith(game.typed.lower())]
+        if ci:
+            c.put(2, py + 2, "大小写不匹配 · Tab 修正", AMBER, PANEL, bold=True)
+        else:
+            c.put(2, py + 2, "没有命令匹配 · Backspace 删除", RED, PANEL, bold=True)
     else:
         c.put(2, py + 2, "等一条命令落下来…", FAINT, PANEL)
 
@@ -168,11 +196,20 @@ def draw_prompt(c: Canvas, game: Game, w: int, h: int, now: float) -> None:
     c.put(45, py + 3, "目标数", FAINT, PANEL)
     c.put(52, py + 3, f"{len(game.commands)}", DIM, PANEL)
 
-    c.put(2, py + 5, "输入高亮命令", TEAL, PANEL, bold=True)
-    c.put(15, py + 5, "·", FAINT, PANEL)
-    c.put(17, py + 5, "Backspace 删除", FAINT, PANEL)
-    c.put(33, py + 5, "·", FAINT, PANEL)
-    c.put(35, py + 5, "Esc 放弃", FAINT, PANEL)
+    x = 2
+    for text, color, bold in (
+        ("输入命令 ", TEAL, True),
+        ("· ", FAINT, False),
+        ("Tab 补全 ", AMBER, True),
+        ("· ", FAINT, False),
+        ("Enter 执行 ", GREEN, True),
+        ("· ", FAINT, False),
+        ("Esc 放弃 ", FAINT, False),
+        ("· ", FAINT, False),
+        ("Backspace 删除", FAINT, False),
+    ):
+        c.put(x, py + 5, text, color, PANEL, bold=bold)
+        x += twidth(text)
     c.right(w - 2, py + 5, "Ctrl-C 退出", FAINT, PANEL)
 
     c.put(2, py + 6, "LUG 终端雨", AMBER, PANEL, bold=True)
@@ -197,7 +234,7 @@ def draw_play(c: Canvas, game: Game, rain: Rain, w: int, h: int, now: float,
         x = (w - 10) // 2
         y = FIELD_Y + field_h // 2 - 3
         for i, line in enumerate(DIGITS.get(label, ())):
-            c.put(x, y + i, line * 2, AMBER, BG, bold=True)
+            c.put(x, y + i, ''.join(ch * 2 for ch in line), AMBER, BG, bold=True)
         c.center(y + 6, "准备", AMBER, BG, bold=True)
         c.center(y + 8, "输入高亮命令", FAINT, BG)
 
@@ -205,26 +242,43 @@ def draw_play(c: Canvas, game: Game, rain: Rain, w: int, h: int, now: float,
 def draw_attract(c: Canvas, game: Game, rain: Rain, board: list[dict],
                  w: int, h: int, now: float) -> None:
     c.fill(0, 0, w, h, " ", INK, BG)
-    rain.draw(c, 0, 0, w, h, 0.60)
-    draw_commands(c, game, 0, 0, w, h - 1, now, 0.55)
+    rain.draw(c, 0, 0, w, h, 0.78)
+    draw_commands(c, game, 0, 0, w, h - 1, now, 0.62)
+
+    ticker = "  LUG // COMMAND RAIN // LINUX USER GROUP // 60 SECONDS // TAB TO COMPLETE // "
+    off = int(now * 12) % len(ticker)
+    line = (ticker * 2)[off:off + max(10, w - 32)]
+    c.put(1, 0, " LUG//ARCADE ", BG, cyc(now, (TEAL, AMBER, PINK), 0.4), bold=True)
+    c.put(15, 0, line, DIM, BG)
+    c.put(w - 12, 0, "SYS.ONLINE", TEAL, BG, bold=True)
+    c.put(w - 1, 0, "|/-\\"[int(now * 10) % 4], AMBER, BG, bold=True)
+
+    # CRT 扫描线，只在面板外可见
+    c.hline(0, int(now * 11) % h, w, "─", scale(TEAL, 0.10), BG)
 
     pw = min(82, w - 10)
     ph = min(21, h - 3)
     px = (w - pw) // 2
     py = max(1, (h - ph) // 2)
-    c.box(px, py, pw, ph, AMBER, PANEL, "LUG 终端雨", AMBER)
-    c.put(px + pw - 6, py, "DEMO", PINK, PANEL, bold=True)
+    border = cyc(now, (AMBER, PINK, PURPLE, TEAL), 0.35)
+    c.box(px, py, pw, ph, border, PANEL, "LUG 终端雨", border)
+    # 面板内部缓慢扫过的暗色光带
+    band = mix(PANEL, PURPLE, 0.10)
+    for yy in range(py + 1, py + ph - 1):
+        for xx in range(px + 1, px + pw - 1):
+            if (xx + yy * 2 - int(now * 26)) % 46 < 5:
+                c.put(xx, yy, " ", INK, band)
 
-    logo_w = draw_logo(c, px + 3, py + 2)
+    logo_w = draw_logo(c, px + 3, py + 2, now)
     tx = px + 5 + logo_w
     if tx + 24 < px + pw:
         c.put(tx, py + 2, "COMMAND", DIM, PANEL, bold=True)
         c.put(tx, py + 3, "RAIN", DIM, PANEL, bold=True)
         c.put(tx, py + 5, "终端雨", PINK, PANEL, bold=True)
-        c.put(tx, py + 6, "LUG 摆摊小游戏", FAINT, PANEL)
+        c.put(tx, py + 6, "LUG 摊位游戏", FAINT, PANEL)
 
-    c.put(px + 3, py + 8, "输入高亮命令，在它落到提示符之前击碎。", INK, PANEL)
-    c.put(px + 3, py + 9, "连击越高倍率越高；60 秒，3 条命。", DIM, PANEL)
+    c.put(px + 3, py + 8, "输入命令，Tab 补全，Enter 执行。", INK, PANEL)
+    c.put(px + 3, py + 9, "别让它落到提示符；连击越高倍率越高。60 秒，3 条命。", DIM, PANEL)
     c.put(px + 3, py + 10, "Backspace 删除 · Esc 放弃 · Ctrl-C 退出", FAINT, PANEL)
 
     ly = py + 12
@@ -241,10 +295,32 @@ def draw_attract(c: Canvas, game: Game, rain: Rain, board: list[dict],
     else:
         c.put(px + 4, ly + 1, "还没有记录 · 来打第一条", FAINT, PANEL)
 
-    label = "按任意键开始"
-    c.put(px + (pw - twidth(label)) // 2, py + ph - 2, label, FAINT, PANEL, bold=True)
+    tips = (
+        "TIP // Tab 补全当前单词，Enter 执行",
+        "TIP // 大小写敏感；按错时 Tab 会修正已输入部分",
+        "TIP // 连击每 5 次升一级倍率，最高 x5",
+        "TIP // 失误不断连击，但会扣一条命",
+    )
+    tip = tips[int(now / 3) % len(tips)]
+    c.put(px + 3, py + ph - 3, tip, scale(TEAL, 0.85), PANEL)
     if int(now * 2) % 2 == 0:
-        c.put(px + (pw - twidth(label)) // 2, py + ph - 2, label, WHITE, PANEL, bold=True)
+        c.put(px + pw - 4, py + ph - 3, "●", PINK, PANEL, bold=True)
+
+    label = "按任意键开始"
+    lx = px + (pw - twidth(label)) // 2
+    c.put(lx, py + ph - 2, label, FAINT, PANEL, bold=True)
+    if int(now * 2) % 2 == 0:
+        c.put(lx, py + ph - 2, label, cyc(now, (WHITE, AMBER, PINK), 1.2), PANEL, bold=True)
+        c.put(lx - 3, py + ph - 2, "▸", AMBER, PANEL, bold=True)
+        c.put(lx + twidth(label) + 2, py + ph - 2, "◂", AMBER, PANEL, bold=True)
+
+    # 面板下方的实时输入行，让待机页一直在动
+    c.put(1, h - 2, "lug@booth", GREEN, BG, bold=True)
+    c.put(10, h - 2, ":~$", TEAL, BG, bold=True)
+    demo_typed = game.typed[-max(4, w - 16):]
+    c.put(14, h - 2, demo_typed, WHITE, BG, bold=True)
+    if int(now * 3) % 2 == 0:
+        c.put(14 + twidth(demo_typed), h - 2, "█", AMBER, BG, bold=True)
     c.right(w - 2, h - 1, "Ctrl-C 退出", FAINT, BG)
 
 
