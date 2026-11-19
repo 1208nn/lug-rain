@@ -127,7 +127,7 @@ class Game:
             self.spawn_timer = self._spawn_interval()
 
         if self.mode == "demo":
-            self._auto_type(dt)
+            self._auto_type(dt, h)
 
     def _spawn_interval(self) -> float:
         if self.mode == "demo":
@@ -281,7 +281,7 @@ class Game:
         else:
             self.combo = 0
 
-    def _auto_type(self, dt: float) -> None:
+    def _auto_type(self, dt: float, field_h: int) -> None:
         self.auto_timer -= dt
         if self.auto_timer > 0:
             return
@@ -290,6 +290,10 @@ class Game:
             self.auto_timer = 0.3
             return
         if self.locked is None:
+            # 先让命令落下来，再开始打字；不然待机页只能看到闪现
+            if target.y < field_h * 0.35:
+                self.auto_timer = 0.08
+                return
             self.locked = target
             self.typed = ""
         if not target.text.startswith(self.typed):
