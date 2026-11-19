@@ -43,7 +43,9 @@ class Game:
         self.state = "playing"
         self.rng = random.Random(seed)
         self.commands: list[Falling] = []
+        self.locked: Falling | None = None
         self.typed = ""
+        self.tabs = 2 if mode == "play" else 0
         self.score = 0
         self.combo = 0
         self.max_combo = 0
@@ -73,15 +75,14 @@ class Game:
     def matches(self) -> list[Falling]:
         if not self.typed:
             return list(self.commands)
-        return [c for c in self.commands if c.text.startswith(self.typed)]
+        return [c for c in self.commands
+                if c.text.lower().startswith(self.typed.lower())]
 
     @property
     def target(self) -> Falling | None:
-        if not self.typed:
-            return self._lowest()
-        exact = [c for c in self.commands if c.text == self.typed]
-        rows = exact or [c for c in self.commands if c.text.startswith(self.typed)]
-        return max(rows, key=lambda c: c.y, default=None)
+        if self.locked is not None and self.locked in self.commands:
+            return self.locked
+        return self._lowest()
 
     @property
     def progress(self) -> float:
@@ -180,76 +181,51 @@ class Game:
     def key(self, key: str) -> None:
         if self.state != "playing" or self.mode != "play":
             return
-        if key in ("esc", "ctrl-c"):
+        if key in ("esc", "ctrl-c", "enter"):
+            return
+        if key == "tab":
+            self.use_tab()
             return
         if key == "backspace":
             self.typed = self.typed[:-1]
-            return
-        if key == "tab":
-            self.complete()
-            return
-        if key == "enter":
-            exact = [c for c in self.commands if c.text == self.typed]
-            if exact:
-                self._destroy(max(exact, key=lambda c: c.y))
-            elif self.typed:
-                self._wrong()
+            if not self.typed:
+                self.locked = None
             return
         if len(key) != 1 or not key.isprintable():
             return
+        ch = key
+        typed = self.typed + ch
 
-        self.typed += key
-        if not any(c.text.startswith(self.typed) for c in self.commands):
-            self._wrong()
-
-    def complete(self) -> None:
-        """像 shell 一样按单词补全；大小写不对时用不区分大小写的候选兜底。"""
-        if not self.typed or not self.commands:
-            return
-        matches = [c for c in self.commands if c.text.startswith(self.typed)]
-        if not matches:
-            # 大小写不对也允许 Tab 修正；这是补全，不是放宽手动输入
-            fixed = [c for c in self.commands
-                     if c.text.lower().startswith(self.typed.lower())]
-            if not fixed:
+        if self.locked is None:
+            candidates = [c for c in self.commands
+                          if c.text.lower().startswith(ch.lower())]
+            if not candidates:
                 self._wrong()
                 return
-            # 只修正已输入部分的字母大小写，不帮忙补后面的内容
-            target = max(fixed, key=lambda c: c.y)
-            n = len(self.typed)
-            if len(target.text) >= n:
-                self.typed = target.text[:n]
-            return
+            self.locked = max(candidates, key=lambda c: c.y)
+            self.typed = ch
+        else:
+            if not self.locked.text.lower().startswith(typed.lower()):
+                self._wrong()
+                return
+            self.typed = typed
 
-        parts = self.typed.split(" ")
-        idx = len(parts) - 1
-        cur = parts[-1]
-        words = []
-        for c in matches:
-            cw = c.text.split(" ")
-            if idx < len(cw):
-                words.append(cw[idx])
-        if not words:
-            return
+        if self.typed.lower() == self.locked.text.lower():
+            self._destroy(self.locked)
 
-        lcp = words[0]
-        for w in words[1:]:
-            while lcp and not w.startswith(lcp):
-                lcp = lcp[:-1]
-        if len(lcp) <= len(cur):
-            # 唯一候选且当前词已经完整：像 shell 一样补一个空格
-            if len(matches) == 1 and cur == words[0]:
-                cw = matches[0].text.split(" ")
-                if idx < len(cw) - 1:
-                    self.typed += " "
+    def use_tab(self) -> None:
+        """消耗一次 Tab：立即完成当前高亮命令。"""
+        if self.state != "playing" or self.mode != "play" or self.tabs <= 0:
             return
-
-        parts[-1] = lcp
-        self.typed = " ".join(parts)
-        if all(w == lcp for w in words) and len(matches) == 1:
-            cw = matches[0].text.split(" ")
-            if idx < len(cw) - 1:
-                self.typed += " "
+        target = self.target
+        if target is None:
+            return
+        self.tabs -= 1
+        self.fx.float(target.x + twidth(target.text) / 2, target.y,
+                      "TAB", (150, 235, 255))
+        self._destroy(target)
+        self.typed = ""
+        self.locked = None
 
     def _wrong(self) -> None:
         self.combo = 0
@@ -272,13 +248,17 @@ class Game:
             self.combo += 1
             self.max_combo = max(self.max_combo, self.combo)
         self.fx.burst(c.x + twidth(c.text) / 2, c.y + 0.5, (255, 198, 96), 14)
-        self.typed = ""
+        if self.locked is c:
+            self.locked = None
+            self.typed = ""
 
     def _miss(self, c: Falling) -> None:
         if self.state != "playing" or c not in self.commands:
             return
         self.commands.remove(c)
-        self.typed = ""
+        if self.locked is c:
+            self.locked = None
+            self.typed = ""
         self.fx.burst(c.x + twidth(c.text) / 2, c.y, (255, 86, 98), 10)
         if self.mode == "play":
             self.lives -= 1
@@ -295,15 +275,18 @@ class Game:
         self.auto_timer -= dt
         if self.auto_timer > 0:
             return
-        target = self.target
+        target = self.locked or self._lowest()
         if target is None:
             self.auto_timer = 0.3
             return
-        if not target.text.startswith(self.typed):
+        if self.locked is None:
+            self.locked = target
+            self.typed = ""
+        if not target.text.lower().startswith(self.typed.lower()):
             self.typed = ""
             return
         self.typed += target.text[len(self.typed)]
-        if self.typed == target.text:
+        if self.typed.lower() == target.text.lower():
             self._destroy(target)
             self.auto_timer = self.rng.uniform(0.28, 0.55)
         else:

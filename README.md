@@ -1,6 +1,6 @@
 # LUG 终端雨
 
-摆在 LUG 摊位上的 **60 秒命令打字街机**。命令从终端上方落下来，在它砸到提示符之前敲完并按 `Enter` 执行掉。
+摆在 LUG 摊位上的 **60 秒命令打字街机**。命令从终端上方落下来，在它砸到提示符之前把整条命令敲完，自动击碎。
 
 适合路人轮流玩：待机时自动运行，按任意键开始；结束后输入 3 个字母进本地排行榜，超时自动回到待机。
 
@@ -12,7 +12,7 @@
          │  ██║   ██║ ██║   ██║ ██║  ███╗                                  │
          │  ██║   ██║ ██║   ██║ ██║   ██║ 终端雨                           │
          │  ╚██████╔╝ ╚██████╔╝ ╚██████╔╝ LUG 摊位游戏                     │
-         │  输入命令，Tab 补全，Enter 执行。                                │
+         │  输入高亮命令，Tab 立即完成，每局 2 次。                          │
          │  别让它落到提示符；连击越高倍率越高。60 秒，3 条命。             │
          │  排行榜                                                          │
          │    1. ABC                                                   2600 │
@@ -42,12 +42,12 @@ mise exec -- uv run python main.py
 ## 玩法
 
 1. 屏幕里会落下 Linux 命令，最下面那条用亮色高亮。
-2. 像 shell 一样输入命令：`Tab` 补全，`Enter` 执行。
-3. 命令落到最下面的红线还没执行，扣一条命。
-4. 60 秒结束或 3 条命用完，本局结束。
+2. 直接输入高亮命令，敲完自动击碎。
+3. `Tab` 可以立即完成当前高亮命令，但每局只有 2 次。
+4. 命令落到最下面的红线还没打完，扣一条命。
+5. 60 秒结束或 3 条命用完，本局结束。
 
-- 大小写敏感，和真实 shell 一致；大小写不对时按 `Tab` 会修正已输入部分。
-- `Tab` 按单词补全，例如 `curl -` + `Tab` → `curl -I`。
+- 大小写不敏感，`curl -i` 也能击碎 `curl -I`。
 - 键入错误会断连击，但不会扣命；`Backspace` 可以删。
 - 连击每 5 次提升一级倍率，最高 5 倍。
 - 目标命令下面会显示中文说明，没玩过 Linux 的人也能照着敲。
@@ -58,8 +58,8 @@ mise exec -- uv run python main.py
 | --- | --- |
 | 任意键 | 待机页开始游戏 |
 | 字母 / 数字 / 符号 | 输入命令 |
-| Tab | 按 shell 习惯补全当前单词 |
-| Enter | 执行命令；结算页确认 3 个字母 |
+| Tab | 立即完成当前高亮命令，每局 2 次 |
+| Enter | 结算页确认 3 个字母 |
 | Backspace | 删除一个字符 |
 | Esc | 游戏中放弃，回到待机 |
 | Ctrl-C | 退出 |
@@ -110,7 +110,7 @@ mise exec -- uv run python main.py
 ```text
 lug           启动脚本
 main.py       状态机、布局、主循环
-game.py       掉落、shell 式输入、连击、生命、待机模式
+game.py       掉落、输入、连击、生命、待机模式
 commands.py   命令池与中文说明
 fx.py         背景雨、粒子、飘字
 canvas.py     真彩画布、宽字符、按行输出
@@ -141,11 +141,8 @@ for step in range(30 * 65):
     g.update(1 / 30, 100, 14)
     if step % 4 == 0 and g.state == "playing":
         t = g.target
-        if t:
-            if g.typed == t.text:
-                g.key("enter")
-            elif t.text.startswith(g.typed):
-                g.key(t.text[len(g.typed)])
+        if t and t.text.lower().startswith(g.typed.lower()):
+            g.key(t.text[len(g.typed)])
     if g.state == "over":
         break
 print(g.score, g.rank, g.kills, g.misses, g.max_combo)

@@ -96,7 +96,7 @@ def draw_header(c: Canvas, game: Game, w: int, now: float) -> None:
     c.put(8 + max(8, min(28, w // 3)), 1, f"{int(math.ceil(game.time_left)):02d}s", color, BG, bold=True)
 
     mult = multiplier(game)
-    combo = f"COMBO {game.combo:02d}  x{mult}"
+    combo = f"COMBO {game.combo:02d}  x{mult}  TAB x{game.tabs}"
     c.right(w - 1, 1, combo, AMBER if mult > 1 else DIM, BG, bold=True)
 
 
@@ -116,7 +116,7 @@ def draw_commands(c: Canvas, game: Game, ox: int, oy: int, w: int, h: int,
         if cmd is target:
             c.put(x - 1, y, "▐", BG, color)
             typed = game.typed if cmd is target else ""
-            if typed and text.startswith(typed):
+            if typed and text.lower().startswith(typed.lower()):
                 c.put(x, y, typed, WHITE, color, bold=True)
                 c.put(x + twidth(typed), y, text[len(typed):], BG, color, bold=True)
             else:
@@ -166,21 +166,12 @@ def draw_prompt(c: Canvas, game: Game, w: int, h: int, now: float) -> None:
         dx = 9 + twidth(target.text)
         c.put(dx, py + 2, "·", FAINT, PANEL)
         c.put(dx + 2, py + 2, target.desc, DIM, PANEL)
-        if game.typed == target.text:
-            c.right(w - 2, py + 2, "Enter 执行", AMBER, PANEL, bold=True)
-        elif game.typed:
-            n = len(game.matches())
-            hint = f"{len(game.typed)}/{twidth(target.text)}"
-            if n > 1:
-                hint += f" · {n} 候选"
-            c.right(w - 2, py + 2, hint, FAINT, PANEL)
-    elif game.typed:
-        ci = [c for c in game.commands
-              if c.text.lower().startswith(game.typed.lower())]
-        if ci:
-            c.put(2, py + 2, "大小写不匹配 · Tab 修正", AMBER, PANEL, bold=True)
+        if game.typed:
+            c.right(w - 2, py + 2,
+                    f"{len(game.typed)}/{twidth(target.text)}", FAINT, PANEL)
         else:
-            c.put(2, py + 2, "没有命令匹配 · Backspace 删除", RED, PANEL, bold=True)
+            c.right(w - 2, py + 2, f"TAB 立即完成 ×{game.tabs}",
+                    AMBER if game.tabs else FAINT, PANEL, bold=True)
     else:
         c.put(2, py + 2, "等一条命令落下来…", FAINT, PANEL)
 
@@ -198,11 +189,9 @@ def draw_prompt(c: Canvas, game: Game, w: int, h: int, now: float) -> None:
 
     x = 2
     for text, color, bold in (
-        ("输入命令 ", TEAL, True),
+        ("输入高亮命令 ", TEAL, True),
         ("· ", FAINT, False),
-        ("Tab 补全 ", AMBER, True),
-        ("· ", FAINT, False),
-        ("Enter 执行 ", GREEN, True),
+        (f"Tab 立即完成 ×{game.tabs} ", AMBER if game.tabs else FAINT, True),
         ("· ", FAINT, False),
         ("Esc 放弃 ", FAINT, False),
         ("· ", FAINT, False),
@@ -277,7 +266,7 @@ def draw_attract(c: Canvas, game: Game, rain: Rain, board: list[dict],
         c.put(tx, py + 5, "终端雨", PINK, PANEL, bold=True)
         c.put(tx, py + 6, "LUG 摊位游戏", FAINT, PANEL)
 
-    c.put(px + 3, py + 8, "输入命令，Tab 补全，Enter 执行。", INK, PANEL)
+    c.put(px + 3, py + 8, "输入高亮命令，Tab 立即完成，每局 2 次。", INK, PANEL)
     c.put(px + 3, py + 9, "别让它落到提示符；连击越高倍率越高。60 秒，3 条命。", DIM, PANEL)
     c.put(px + 3, py + 10, "Backspace 删除 · Esc 放弃 · Ctrl-C 退出", FAINT, PANEL)
 
@@ -296,8 +285,8 @@ def draw_attract(c: Canvas, game: Game, rain: Rain, board: list[dict],
         c.put(px + 4, ly + 1, "还没有记录 · 来打第一条", FAINT, PANEL)
 
     tips = (
-        "TIP // Tab 补全当前单词，Enter 执行",
-        "TIP // 大小写敏感；按错时 Tab 会修正已输入部分",
+        "TIP // Tab 立即完成当前命令，每局只有 2 次",
+        "TIP // 直接敲完整命令；大小写不敏感",
         "TIP // 连击每 5 次升一级倍率，最高 x5",
         "TIP // 失误不断连击，但会扣一条命",
     )
