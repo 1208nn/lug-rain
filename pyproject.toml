@@ -1,0 +1,6 @@
+[project]
+name = "lug-rain"
+version = "0.1.0"
+description = "LUG 终端雨 —— 摊位上的命令打字街机"
+requires-python = ">=3.13"
+dependencies = []
