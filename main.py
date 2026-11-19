@@ -21,15 +21,17 @@ from term import Terminal
 MIN_W, MIN_H = 80, 24
 FPS = 30
 FIELD_Y = 3
+ATTRACT_TOP = 7
+ATTRACT_FOOTER = 5
 
 TIER_COLOR = {1: TEAL, 2: AMBER, 3: PINK}
 
 LUG_LOGO = (
-    "██╗   ██╗ ██╗   ██╗  ██████╗",
-    "██║   ██║ ██║   ██║ ██╔════╝",
-    "██║   ██║ ██║   ██║ ██║  ███╗",
-    "██║   ██║ ██║   ██║ ██║   ██║",
-    "╚██████╔╝ ╚██████╔╝ ╚██████╔╝",
+    "██      ██   ██  ██████",
+    "██      ██   ██  ██    ",
+    "██      ██   ██  ██  ███",
+    "██      ██   ██  ██   ██",
+    "███████  █████   ██████",
 )
 LOGO_COLORS = (AMBER, AMBER, TEAL, TEAL, PURPLE)
 
@@ -70,6 +72,10 @@ def draw_logo(c: Canvas, x: int, y: int, now: float) -> int:
                 color = WHITE
             c.put(x + j, y + i, ch, color, PANEL, bold=True)
     return twidth(LUG_LOGO[0])
+
+
+def attract_field_h(h: int) -> int:
+    return max(1, h - ATTRACT_TOP - ATTRACT_FOOTER)
 
 
 def draw_rank(c: Canvas, x: int, y: int, rank: str, color) -> None:
@@ -234,10 +240,16 @@ def draw_play(c: Canvas, game: Game, rain: Rain, w: int, h: int, now: float,
 def draw_attract(c: Canvas, game: Game, rain: Rain, board: list[dict],
                  w: int, h: int, now: float) -> None:
     c.fill(0, 0, w, h, " ", INK, BG)
-    rain.draw(c, 0, 0, w, h, 0.78)
-    draw_commands(c, game, 0, 0, w, h - 1, now, 0.62)
+    fy = ATTRACT_TOP
+    fh = attract_field_h(h)
 
-    ticker = "  LUG // COMMAND RAIN // LINUX USER GROUP // 60 SECONDS // TAB TO COMPLETE // "
+    # 演示场：整块可见，不再被中间的大面板挡住
+    rain.draw(c, 0, fy, w, fh, 0.60, wrap=True)
+    c.hline(0, fy + int(now * 11) % fh, w, "─", scale(TEAL, 0.10), BG)
+    draw_commands(c, game, 0, fy, w, fh, now, 0.95)
+
+    # 顶部 ticker
+    ticker = "  LUG // COMMAND RAIN // LINUX USER GROUP // 60 SECONDS // TAB x2 // "
     off = int(now * 12) % len(ticker)
     line = (ticker * 2)[off:off + max(10, w - 32)]
     c.put(1, 0, " LUG//ARCADE ", BG, cyc(now, (TEAL, AMBER, PINK), 0.4), bold=True)
@@ -245,75 +257,60 @@ def draw_attract(c: Canvas, game: Game, rain: Rain, board: list[dict],
     c.put(w - 12, 0, "SYS.ONLINE", TEAL, BG, bold=True)
     c.put(w - 1, 0, "|/-\\"[int(now * 10) % 4], AMBER, BG, bold=True)
 
-    # CRT 扫描线，只在面板外可见
-    c.hline(0, int(now * 11) % h, w, "─", scale(TEAL, 0.10), BG)
+    # 顶部品牌区
+    c.fill(0, 1, w, 6, " ", INK, PANEL)
+    c.hline(0, 6, w, "─", cyc(now, (AMBER, PINK, PURPLE, TEAL), 0.35), PANEL)
+    logo_w = draw_logo(c, 2, 1, now)
+    tx = 2 + logo_w + 3
+    c.put(tx, 1, "COMMAND RAIN", DIM, PANEL, bold=True)
+    c.put(tx, 2, "终端雨", PINK, PANEL, bold=True)
+    c.put(tx, 3, "60 秒 · 3 条命 · Tab x2", FAINT, PANEL)
+    c.put(tx, 4, "输入高亮命令，Tab 立即完成", INK, PANEL)
+    c.put(tx, 5, "别让命令落到提示符", DIM, PANEL)
 
-    pw = min(82, w - 10)
-    ph = min(21, h - 3)
-    px = (w - pw) // 2
-    py = max(1, (h - ph) // 2)
-    border = cyc(now, (AMBER, PINK, PURPLE, TEAL), 0.35)
-    c.box(px, py, pw, ph, border, PANEL, "LUG 终端雨", border)
-    # 面板内部缓慢扫过的暗色光带
-    band = mix(PANEL, PURPLE, 0.10)
-    for yy in range(py + 1, py + ph - 1):
-        for xx in range(px + 1, px + pw - 1):
-            if (xx + yy * 2 - int(now * 26)) % 46 < 5:
-                c.put(xx, yy, " ", INK, band)
+    lx = w - 24
+    if lx > tx + 27:
+        c.put(lx, 1, "排行榜", AMBER, PANEL, bold=True)
+        if board:
+            for i, row in enumerate(board[:3]):
+                name = str(row.get("name", "???"))[:3]
+                score = int(row.get("score", 0))
+                color = AMBER if i == 0 else INK if i < 3 else DIM
+                c.put(lx, 2 + i, f"{i + 1}. {name}", color, PANEL, bold=True)
+                c.right(w - 2, 2 + i, f"{score:>6}", color, PANEL)
+        else:
+            c.put(lx, 2, "还没有记录", FAINT, PANEL)
 
-    logo_w = draw_logo(c, px + 3, py + 2, now)
-    tx = px + 5 + logo_w
-    if tx + 24 < px + pw:
-        c.put(tx, py + 2, "COMMAND", DIM, PANEL, bold=True)
-        c.put(tx, py + 3, "RAIN", DIM, PANEL, bold=True)
-        c.put(tx, py + 5, "终端雨", PINK, PANEL, bold=True)
-        c.put(tx, py + 6, "LUG 摊位游戏", FAINT, PANEL)
-
-    c.put(px + 3, py + 8, "输入高亮命令，Tab 立即完成，每局 2 次。", INK, PANEL)
-    c.put(px + 3, py + 9, "别让它落到提示符；连击越高倍率越高。60 秒，3 条命。", DIM, PANEL)
-    c.put(px + 3, py + 10, "Backspace 删除 · Esc 放弃 · Ctrl-C 退出", FAINT, PANEL)
-
-    ly = py + 12
-    c.put(px + 3, ly, "排行榜", AMBER, PANEL, bold=True)
-    c.hline(px + 9, ly, max(0, pw - 12), "─", FAINT, PANEL)
-    if board:
-        for i, row in enumerate(board[:4]):
-            name = str(row.get("name", "???"))[:3]
-            score = int(row.get("score", 0))
-            color = AMBER if i == 0 else INK if i < 3 else DIM
-            c.put(px + 4, ly + 1 + i, f"{i + 1:>2}.", FAINT, PANEL)
-            c.put(px + 8, ly + 1 + i, name, color, PANEL, bold=True)
-            c.right(px + pw - 4, ly + 1 + i, f"{score:>6}", color, PANEL)
-    else:
-        c.put(px + 4, ly + 1, "还没有记录 · 来打第一条", FAINT, PANEL)
-
+    # 底部操作区
+    c.fill(0, h - ATTRACT_FOOTER, w, ATTRACT_FOOTER, " ", INK, PANEL)
+    c.hline(0, h - ATTRACT_FOOTER, w, "─", FAINT, PANEL)
     tips = (
         "TIP // Tab 立即完成当前命令，每局只有 2 次",
         "TIP // 大小写敏感；-I 这种要用 Shift 输入大写",
         "TIP // 连击每 5 次升一级倍率，最高 x5",
         "TIP // 失误不断连击，但会扣一条命",
     )
-    tip = tips[int(now / 3) % len(tips)]
-    c.put(px + 3, py + ph - 3, tip, scale(TEAL, 0.85), PANEL)
-    if int(now * 2) % 2 == 0:
-        c.put(px + pw - 4, py + ph - 3, "●", PINK, PANEL, bold=True)
+    c.put(2, h - 4, tips[int(now / 3) % len(tips)], scale(TEAL, 0.9), PANEL)
+    c.right(w - 2, h - 4, "Ctrl-C 退出", FAINT, PANEL)
 
     label = "按任意键开始"
-    lx = px + (pw - twidth(label)) // 2
-    c.put(lx, py + ph - 2, label, FAINT, PANEL, bold=True)
+    lx = (w - twidth(label)) // 2
+    c.put(lx, h - 3, label, FAINT, PANEL, bold=True)
     if int(now * 2) % 2 == 0:
-        c.put(lx, py + ph - 2, label, cyc(now, (WHITE, AMBER, PINK), 1.2), PANEL, bold=True)
-        c.put(lx - 3, py + ph - 2, "▸", AMBER, PANEL, bold=True)
-        c.put(lx + twidth(label) + 2, py + ph - 2, "◂", AMBER, PANEL, bold=True)
+        color = cyc(now, (WHITE, AMBER, PINK), 1.2)
+        c.put(lx, h - 3, label, color, PANEL, bold=True)
+        c.put(lx - 3, h - 3, "▸", AMBER, PANEL, bold=True)
+        c.put(lx + twidth(label) + 2, h - 3, "◂", AMBER, PANEL, bold=True)
 
-    # 面板下方的实时输入行，让待机页一直在动
-    c.put(1, h - 2, "lug@booth", GREEN, BG, bold=True)
-    c.put(10, h - 2, ":~$", TEAL, BG, bold=True)
     demo_typed = game.typed[-max(4, w - 16):]
-    c.put(14, h - 2, demo_typed, WHITE, BG, bold=True)
+    c.put(1, h - 2, "lug@booth", GREEN, PANEL, bold=True)
+    c.put(10, h - 2, ":~$", TEAL, PANEL, bold=True)
+    c.put(14, h - 2, demo_typed, WHITE, PANEL, bold=True)
     if int(now * 3) % 2 == 0:
-        c.put(14 + twidth(demo_typed), h - 2, "█", AMBER, BG, bold=True)
-    c.right(w - 2, h - 1, "Ctrl-C 退出", FAINT, BG)
+        c.put(14 + twidth(demo_typed), h - 2, "█", AMBER, PANEL, bold=True)
+    c.put(1, h - 1, "LUG 终端雨 · COMMAND RAIN", FAINT, PANEL)
+    c.right(w - 2, h - 1, "v1.0", FAINT, PANEL)
+
 
 
 def draw_over(c: Canvas, game: Game, rain: Rain, board: list[dict], w: int, h: int,
@@ -467,7 +464,7 @@ def main(argv: list[str] | None = None) -> int:
                     continue
 
                 if state == "attract":
-                    game.update(dt, w, max(1, h - 1))
+                    game.update(dt, w, attract_field_h(h))
                     for key in keys:
                         if key == "ctrl-c":
                             running = False

@@ -24,17 +24,17 @@ class Rain:
             return
         self.w, self.h = w, h
         self.cols = []
-        step = 5
+        step = 4
         for x in range(1, max(2, w - 1), step):
             self.cols.append(self._new_col(x, top=True))
 
     def _new_col(self, x: int, top: bool = False) -> dict:
-        length = self.rng.randint(2, 6)
+        length = self.rng.randint(3, 8)
         return {
             "x": x,
             "y": self.rng.uniform(-self.h, 0) if top else -length,
             "len": length,
-            "speed": self.rng.uniform(3.0, 10.0),
+            "speed": self.rng.uniform(2.5, 8.0),
             "color": self.rng.choice(RAIN_COLORS),
             "chars": [self.rng.choice(RAIN_CHARS) for _ in range(length)],
         }
@@ -46,14 +46,16 @@ class Rain:
                 fresh = self._new_col(c["x"])
                 c.update(fresh)
 
-    def draw(self, c: Canvas, x: int, y: int, w: int, h: int, dim: float = 0.42) -> None:
+    def draw(self, c: Canvas, x: int, y: int, w: int, h: int,
+             dim: float = 0.42, wrap: bool = False) -> None:
         for col in self.cols:
             cx = x + col["x"]
             if not (x <= cx < x + w):
                 continue
             color = scale(col["color"], dim)
+            base = int(col["y"])
             for i, ch in enumerate(col["chars"]):
-                cy = y + int(col["y"]) - i
+                cy = y + (base - i) % h if wrap else y + base - i
                 if y <= cy < y + h:
                     c.put(cx, cy, ch, color, BG)
 

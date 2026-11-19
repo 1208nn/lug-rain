@@ -11,7 +11,7 @@ from fx import Effects
 
 ROUND_TIME = 60.0
 MAX_ACTIVE = 6
-MAX_DEMO = 7
+MAX_DEMO = 8
 TIER_BASE = {1: 10, 2: 20, 3: 30}
 
 
@@ -65,7 +65,7 @@ class Game:
         self.fx = Effects(seed)
         # 演示模式一开始就有内容
         if mode == "demo":
-            for _ in range(4):
+            for _ in range(6):
                 self._spawn(140, force=True)
 
     # ---------- 查询 ----------
@@ -132,7 +132,7 @@ class Game:
     def _spawn_interval(self) -> float:
         if self.mode == "demo":
             e = min(self.elapsed, 30.0)
-            return max(0.60, 0.95 - e * 0.010)
+            return max(0.50, 0.85 - e * 0.008)
         return max(0.78, 2.05 - self.elapsed * 0.020)
 
     def _spawn(self, w: int, force: bool = False) -> None:
@@ -298,9 +298,9 @@ class Game:
         self.typed += target.text[len(self.typed)]
         if self.typed == target.text:
             self._destroy(target)
-            self.auto_timer = self.rng.uniform(0.28, 0.55)
+            self.auto_timer = self.rng.uniform(0.35, 0.60)
         else:
-            self.auto_timer = self.rng.uniform(0.075, 0.14)
+            self.auto_timer = self.rng.uniform(0.16, 0.26)
 
     # ---------- 结算 ----------
 
